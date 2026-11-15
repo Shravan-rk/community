@@ -5,6 +5,8 @@ import { prisma } from '../db.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { AppError } from '../lib/errors.js';
 import { parseLanguage } from '../lib/language.js';
+import { evaluateEligibility } from '../lib/eligibility.js';
+import { authenticate } from '../middleware/authenticate.js';
 import {
   schemeDetailInclude,
   schemeListInclude,
@@ -161,6 +163,36 @@ router.get(
       })),
       missingSlugs,
       comparedCount: ordered.length,
+    });
+  }),
+);
+
+router.get(
+  '/:slug/eligibility',
+  authenticate,
+  validate(detailQuerySchema, 'query'),
+  asyncHandler(async (req, res) => {
+    const query = req.query as unknown as z.infer<typeof detailQuerySchema>;
+    const language = parseLanguage(query.language);
+
+    const scheme = await prisma.scheme.findFirst({
+      where: { slug: req.params.slug, status: 'PUBLISHED' },
+      include: {
+        ...schemeListInclude,
+        eligibilityRules: { orderBy: { sortOrder: 'asc' } },
+      },
+    });
+    if (!scheme) throw AppError.notFound('This scheme is not published or does not exist.');
+
+    const profile = await prisma.citizenProfile.findUnique({ where: { userId: req.user!.id } });
+
+    res.json({
+      scheme: shapeSchemeSummary(scheme, language),
+      profile: {
+        hasProfile: Boolean(profile),
+        onboardingCompleted: profile?.onboardingCompleted ?? false,
+      },
+      eligibility: evaluateEligibility(scheme.eligibilityRules, profile, language),
     });
   }),
 );

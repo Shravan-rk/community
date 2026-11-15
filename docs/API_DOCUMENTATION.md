@@ -115,6 +115,78 @@ not published. Every successful call increments `views` by one.
 
 Query: `limit` (1–8, default 4), `language`. Same-category published schemes ordered by views.
 
+### GET /schemes/:slug/eligibility
+
+**Auth: Bearer required.** Evaluates the published scheme's eligibility rules against the caller's
+own citizen profile. Query: `language=kn|en|hi` (default `kn`). Never evaluates unpublished schemes
+(`404`).
+
+```json
+{
+  "scheme": { "slug": "pm-kisan", "title": "…", "…": "…" },
+  "profile": { "hasProfile": true, "onboardingCompleted": true },
+  "eligibility": {
+    "assessment": "NEEDS_INFORMATION",
+    "label": "ಹೆಚ್ಚಿನ ಮಾಹಿತಿ ಅಗತ್ಯ",
+    "likelyEligible": false,
+    "counts": { "total": 3, "required": 3, "optional": 0, "met": 2, "notMet": 0, "unknown": 1 },
+    "missingProfileFields": ["annualIncome"],
+    "disclaimer": "ಇದು ಕೇವಲ ಮಾಹಿತಿಗಾಗಿ ನೀಡುವ ಅಂದಾಜು; …",
+    "language": "kn",
+    "rules": [
+      {
+        "field": "age",
+        "operator": "GTE",
+        "required": true,
+        "status": "MET",
+        "reason": "MATCH",
+        "expected": 18,
+        "actual": 31,
+        "description": "ಅರ್ಜಿದಾರರಿಗೆ 18 ವರ್ಷ ಅಥವಾ ಹೆಚ್ಚು ವಯಸ್ಸು",
+        "descriptionLanguage": "kn",
+        "sortOrder": 0
+      },
+      {
+        "field": "annualIncome",
+        "operator": "LTE",
+        "required": true,
+        "status": "UNKNOWN",
+        "reason": "MISSING_PROFILE_DATA",
+        "expected": 300000,
+        "actual": null,
+        "description": "…",
+        "descriptionLanguage": "kn",
+        "sortOrder": 1
+      }
+    ]
+  }
+}
+```
+
+Assessments:
+
+| Value | Meaning |
+|---|---|
+| `LIKELY_ELIGIBLE` | Every required rule is met. Informational only — not an approval. |
+| `NOT_ELIGIBLE` | At least one required rule is not met. |
+| `NEEDS_INFORMATION` | No required rule failed, but some required data is missing or a rule/value type is invalid. |
+| `NOT_ASSESSABLE` | The scheme has no required machine-readable rules; read the official guidelines. |
+
+Rule statuses are `MET`, `NOT_MET` or `UNKNOWN`; reasons are `MATCH`, `MISMATCH`,
+`MISSING_PROFILE_DATA`, `INVALID_RULE` or `INCOMPATIBLE_VALUE`. Optional rules are reported but never
+block eligibility. The `actual` value is the caller's own profile-derived value (age is derived from
+`dateOfBirth`); it is never exposed to other users.
+
+Supported profile fields (`/api/meta` → `eligibilityFields`): `age`, `annualIncome`, `occupation`,
+`gender`, `education`, `landHoldingAcres`, `socialCategory`, `disabilityStatus`, `state`, `district`,
+`familySize`. Custom fields may be supplied via `CitizenProfile.profileJson`; explicit columns take
+precedence. Operators: `GTE`, `LTE`, `EQ`, `NEQ`, `IN`, `CONTAINS`, `EXISTS` (`EXISTS` means the
+profile has a value for the field; missing data is `UNKNOWN`). String comparisons are
+case-insensitive; numeric strings are normalised to numbers.
+
+> The API never claims guaranteed eligibility. Every assessment includes a localized disclaimer;
+> final decisions rest with the official department.
+
 ## Authentication
 
 | Method | Path | Auth | Description |
@@ -177,6 +249,7 @@ Response `200`: `{ "token": "<jwt>", "user": {…}, "profile": {…} | null }`.
 | GET | `/citizens/me/saved-schemes` | List saved schemes (newest first) with `savedAt`; query `language`. |
 | POST | `/citizens/me/saved-schemes` | Save a published scheme. Body: `{ "slug": "pm-kisan" }`. Idempotent: repeat calls return `200` with `alreadySaved: true`. |
 | DELETE | `/citizens/me/saved-schemes/:slug` | Remove a saved scheme. `404` if it was not saved. |
+| GET | `/citizens/me/eligible-schemes` | Ranked published schemes evaluated against the caller's profile. Query: `page`, `pageSize` (≤50), `filter`, `language`. |
 
 Profile fields (all optional, nullable where noted): `dateOfBirth` (ISO date, not future),
 `gender` (`MALE|FEMALE|OTHER|PREFER_NOT_TO_SAY`), `state`, `district`, `taluk`, `village`,
@@ -186,6 +259,43 @@ Profile fields (all optional, nullable where noted): `dateOfBirth` (ISO date, no
 `profileJson` (object), `onboardingCompleted` (boolean).
 
 > Aadhaar: only the last four digits may be stored. Never send a full Aadhaar number or banking credentials.
+
+### GET /citizens/me/eligible-schemes
+
+Evaluates every `PUBLISHED` scheme against the caller's profile. `filter` is one of
+`LIKELY_ELIGIBLE` (default), `NEEDS_INFORMATION`, `NOT_ELIGIBLE`, `NOT_ASSESSABLE` or `ALL`.
+Results are ranked likely eligible → needs information → not assessable → not eligible, then by
+newest publication. Only list summaries are returned (no per-rule details); call
+`/schemes/:slug/eligibility` for explanations.
+
+```json
+{
+  "language": "kn",
+  "filter": "LIKELY_ELIGIBLE",
+  "profile": { "hasProfile": true, "onboardingCompleted": true, "missingFields": ["district"] },
+  "summary": {
+    "totalPublished": 12,
+    "countsByAssessment": { "LIKELY_ELIGIBLE": 3, "NEEDS_INFORMATION": 6, "NOT_ELIGIBLE": 2, "NOT_ASSESSABLE": 1 }
+  },
+  "schemes": [
+    {
+      "slug": "pm-kisan", "title": "…", "…": "…",
+      "eligibility": {
+        "assessment": "LIKELY_ELIGIBLE", "label": "ಸಂಭಾವ್ಯ ಅರ್ಹತೆ", "likelyEligible": true,
+        "counts": { "total": 3, "required": 3, "optional": 0, "met": 3, "notMet": 0, "unknown": 0 },
+        "missingProfileFields": []
+      }
+    }
+  ],
+  "pagination": { "page": 1, "pageSize": 12, "total": 3, "totalPages": 1 },
+  "disclaimer": "…"
+}
+```
+
+`profile.missingFields` is the union of required fields missing across all published schemes, so the
+client can guide profile completion. A new registration has a profile row (`hasProfile: true`) but
+`onboardingCompleted` remains false until the citizen fills it in. Staff accounts without a citizen
+profile simply receive `NEEDS_INFORMATION` assessments.
 
 ## Admin (ADMIN or SUPER_ADMIN unless noted)
 
@@ -274,5 +384,5 @@ as `DRAFT`.
 
 ## Not yet implemented
 
-Eligibility evaluation, notifications, analytics, assistance centres, monitoring administration,
-document upload/OCR and the AI voice assistant. These are tracked in `PROJECT_STATUS.md`.
+Notifications, analytics, assistance centres, monitoring administration, document upload/OCR,
+application tracking and the AI voice assistant. These are tracked in `PROJECT_STATUS.md`.

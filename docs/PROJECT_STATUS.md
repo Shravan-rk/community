@@ -4,8 +4,8 @@ Last updated: 2026-11-15
 
 ## Current development phase
 
-**Phases 0–3 complete**: foundation (safety, database, auth/RBAC) plus public scheme discovery and
-admin scheme management.
+**Phases 0–4 complete**: foundation (safety, database, auth/RBAC), public discovery plus admin
+scheme management, and the eligibility assessment engine.
 
 > The master plan lists UI as Phase 2 and database as Phase 3. Based on the approved audit
 > decisions (empty repository, no PostgreSQL/Redis), work started with safety, database and
@@ -64,12 +64,29 @@ admin scheme management.
   stamp cleared) so unverified changes never reach citizens.
 - 32 automated API tests total across 2 files — all passing.
 
+### Phase 4 — Eligibility assessment engine
+- Pure evaluator (`src/lib/eligibility.ts`) with no framework or database coupling; supports
+  `GTE`, `LTE`, `EQ`, `NEQ`, `IN`, `CONTAINS` and `EXISTS`, case-insensitive strings, numeric
+  normalisation, derived `age`, and custom `profileJson` fields (explicit columns win).
+- Four honest outcomes: `LIKELY_ELIGIBLE`, `NOT_ELIGIBLE`, `NEEDS_INFORMATION` and
+  `NOT_ASSESSABLE`. Required vs optional rules are separated; optional failures never block.
+- Per-rule explanations include expected/actual values, status (`MET`/`NOT_MET`/`UNKNOWN`) and
+  reason codes (`MISSING_PROFILE_DATA`, `INVALID_RULE`, `INCOMPATIBLE_VALUE`, …), localized
+  Kannada/English descriptions, and a localized "estimate only" disclaimer. No approval claims.
+- `GET /api/schemes/:slug/eligibility` (Bearer) evaluates one published scheme against the
+  caller's own profile; unpublished schemes stay hidden.
+- `GET /api/citizens/me/eligible-schemes` evaluates all published schemes in memory, ranks them,
+  filters by assessment, reports missing profile fields, paginates and exposes assessment counts.
+- `/api/meta` publishes eligible fields, operators and assessment values for clients.
+- 49 automated tests total across 3 files (17 new eligibility tests, including operator and
+  missing-data edge cases) — all passing.
+
 ## Not started
 
 - Citizen web UI (Kannada-first React application).
 - Government monitoring engine, OCR/AI extraction, translation pipeline (admin review UI exists at
   the API level; automated ingestion does not).
-- Eligibility engine, AI voice assistant, application assistant.
+- AI voice assistant, application assistant.
 - Notification delivery (in-app/Web Push/SMS/WhatsApp), analytics, village assistance, PWA/offline.
 
 ## Known issues / limitations
@@ -91,15 +108,21 @@ admin scheme management.
    they do not overwrite `titleKn`/`summaryKn`.
 10. Version snapshots capture scheme fields and eligibility rules; they do not yet include documents
     or translations.
-11. Prisma 6 emits a deprecation warning for `package.json#prisma` (seed config); migrate to
+11. Eligibility matching loads and evaluates every published scheme in memory. This is deliberate for
+    correctness while the catalogue is small; add database-side pre-filtering when it grows.
+12. Eligibility depends on profile completeness and rule quality. Unknown fields, malformed rule
+    JSON and type mismatches surface as `NEEDS_INFORMATION`, never as a guess. `EXISTS` only checks
+    that the profile has a value; it cannot express "must be false".
+13. Hindi rule descriptions fall back to English (rule records store only English and Kannada
+    descriptions); Hindi UI copy/disclaimer is provided.
+14. Prisma 6 emits a deprecation warning for `package.json#prisma` (seed config); migrate to
     `prisma.config.ts` before Prisma 7.
-12. The repository has no CI pipeline yet.
+15. The repository has no CI pipeline yet.
 
 ## Next actions (approved sequence)
 
-1. **Phase 4:** Eligibility engine (rule evaluation + explanations, no approval guarantees).
-2. **Phase 5:** Monitoring engine + extraction/translation pipeline (enables the end-to-end
-   acceptance scenario; admin verification APIs already exist).
-3. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard.
-4. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
+1. **Phase 5:** Monitoring engine + extraction/translation pipeline (enables the end-to-end
+   acceptance scenario; admin verification and eligibility APIs already exist).
+2. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard.
+3. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
    hardening, deployment.

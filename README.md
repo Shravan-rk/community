@@ -2,7 +2,7 @@
 
 AI-powered government scheme awareness and livelihood assistance platform for rural citizens in India. Kannada-first, mobile-first, built for Karnataka with support for English and Hindi.
 
-> **Status:** Early development. Backend foundation (Phases 1–2) is implemented. The citizen UI is not built yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status:** Early development. Backend foundation and APIs (Phases 0–4: auth/RBAC, discovery, admin scheme workflow, eligibility assessment) are implemented. The citizen UI is not built yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Repository layout
 

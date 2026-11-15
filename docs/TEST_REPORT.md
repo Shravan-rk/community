@@ -12,18 +12,19 @@ Database under test: SQLite `server/prisma/dev.db` (smoke) and dedicated `server
 | Production build | `npm run build` | **PASS** (`dist/index.js` emitted) |
 | Seed (first run) | `npm run seed` | **PASS** — 16 categories, 7 sources, 5 users, 12 schemes created |
 | Seed (second run, idempotency) | `npm run seed` | **PASS** — 0 created, 12 updated |
-| Automated API tests | `npm run test` | **PASS** — 32/32 tests, 2 files |
-| Live API smoke test | start server + HTTP calls | **PASS** (Phase 2 baseline; Phase 3 exercised through Supertest) |
+| Automated API tests | `npm run test` | **PASS** — 49/49 tests, 3 files |
+| Live API smoke test | start server + HTTP calls | **PASS** (Phase 2 baseline; later phases exercised through Supertest) |
 | Prisma schema validation | implicit in `generate`/`migrate`/`db push` | **PASS** |
 
 ## Automated tests (Vitest 2.1.9 + Supertest)
 
 ```
-✓ tests/schemes.test.ts (14 tests) 1735ms
-✓ tests/auth.test.ts (18 tests) 750ms
-Test Files  2 passed (2)
-Tests       32 passed (32)
-Duration    9.80s
+✓ tests/schemes.test.ts (14 tests) 1204ms
+✓ tests/eligibility.test.ts (17 tests) 1018ms
+✓ tests/auth.test.ts (18 tests) 538ms
+Test Files  3 passed (3)
+Tests       49 passed (49)
+Duration    7.61s
 ```
 
 Coverage of behaviour:
@@ -62,6 +63,18 @@ Coverage of behaviour:
     version and store a snapshot; no-op edits do not bump versions.
 32. Verification decisions, publish/expire permissions and transitions are enforced; translation
     updates merge fields and record review quality/reviewer.
+33. Age derivation respects birthday boundaries; missing/invalid dates do not produce an age.
+34. All operators (`GTE`, `LTE`, `EQ`, `NEQ`, `IN`, `CONTAINS`, `EXISTS`) behave as documented,
+    including numeric strings and case-insensitive strings.
+35. Required rule failures yield `NOT_ELIGIBLE`; optional failures do not block eligibility.
+36. Missing required data yields `NEEDS_INFORMATION` with the field named; filling the profile
+    upgrades the assessment without a restart.
+37. Schemes without required rules are `NOT_ASSESSABLE` (no invented eligibility).
+38. Malformed rule JSON and unsupported operators become `UNKNOWN`/`INVALID_RULE`, never a guess.
+39. `profileJson` custom fields work without overriding explicit profile columns.
+40. Eligibility APIs require auth, hide unpublished schemes, return localized explanations and the
+    disclaimer, and matching supports filters, ranking, pagination, summary counts and missing-field
+    hints (including the no-profile case). `/api/meta` exposes fields/operators/assessments.
 
 Test isolation: the global setup runs `prisma db push --force-reset` **only** against the dedicated
 `prisma/test.db`. The development database is never reset by tests. Every test calls the shared
@@ -86,13 +99,15 @@ translations=12, eligibilityRules=18`.
 ## Not yet tested (features not built)
 
 - Citizen/admin UI (no frontend exists yet).
-- Eligibility evaluation, monitoring pipeline, OCR/AI extraction, automated translation,
-  notifications, analytics, voice assistant.
+- Monitoring pipeline, OCR/AI extraction, automated translation, notifications, analytics, voice
+  assistant.
 - Load/performance testing, penetration testing, accessibility audit.
 - Multi-instance rate limiting / shared cache behaviour.
 
 ## Known test limitations
 
-- No unit tests for `matching`-style business logic yet (eligibility engine comes in Phase 4).
+- Eligibility tests use synthetic rules and profiles; real government criteria may need new
+  operators/fields when verified notices are ingested.
+- Matching evaluates every published scheme in memory (fine at the current catalogue size).
 - Tests run sequentially in a single fork for deterministic database state.
 - No coverage threshold configured yet.

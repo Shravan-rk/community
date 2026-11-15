@@ -28,7 +28,6 @@ Planned services (later phases):
 - PWA/offline strategy and low-bandwidth mode in a later phase.
 
 ## Backend (implemented, Phases 2+)
-
 - Node.js + Express 4 + TypeScript (ESM, NodeNext resolution, strict mode).
 - Layered structure:
   - `src/routes/*` — HTTP routing and request/response shaping.
@@ -38,6 +37,11 @@ Planned services (later phases):
   - `src/env.ts` — validated configuration (Zod); the process refuses to start on invalid config.
 - Security controls: Helmet headers, CORS allowlist, JSON body limit, per-IP rate limits,
   structured error envelopes without stack traces in production, audit trail.
+- Eligibility assessment (`src/lib/eligibility.ts`) is a pure, database-agnostic evaluator over
+  `EligibilityRule` rows and the citizen's own profile. It derives age, handles typed/operator edge
+  cases, separates required from optional rules and returns honest outcomes
+  (`LIKELY_ELIGIBLE`, `NOT_ELIGIBLE`, `NEEDS_INFORMATION`, `NOT_ASSESSABLE`) with explanations and
+  a disclaimer. It never calls an external service at request time.
 - Output: JSON REST API under `/api`. OpenAPI/Swagger is a future addition.
 
 ## Database

@@ -6,6 +6,7 @@ import { AppError } from '../lib/errors.js';
 import { parseJsonArray } from '../lib/publicUser.js';
 import { recordAudit } from '../lib/audit.js';
 import { parseLanguage } from '../lib/language.js';
+import { evaluateEligibility, eligibilityDisclaimer } from '../lib/eligibility.js';
 import { schemeListInclude, shapeSchemeSummary } from '../lib/schemeContent.js';
 import { authenticate } from '../middleware/authenticate.js';
 import { validate } from '../middleware/validate.js';
@@ -359,6 +360,111 @@ router.delete(
     );
 
     res.json({ saved: false, schemeSlug: scheme.slug });
+  }),
+);
+
+const matchesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(12),
+  filter: z
+    .enum(['LIKELY_ELIGIBLE', 'NEEDS_INFORMATION', 'NOT_ELIGIBLE', 'NOT_ASSESSABLE', 'ALL'])
+    .default('LIKELY_ELIGIBLE'),
+  language: z.enum(['kn', 'en', 'hi']).default('kn'),
+});
+
+const ASSESSMENT_RANK: Record<string, number> = {
+  LIKELY_ELIGIBLE: 0,
+  NEEDS_INFORMATION: 1,
+  NOT_ASSESSABLE: 2,
+  NOT_ELIGIBLE: 3,
+};
+
+router.get(
+  '/me/eligible-schemes',
+  validate(matchesQuerySchema, 'query'),
+  asyncHandler(async (req, res) => {
+    const query = req.query as unknown as z.infer<typeof matchesQuerySchema>;
+    const language = parseLanguage(query.language);
+
+    const [profile, schemes] = await Promise.all([
+      prisma.citizenProfile.findUnique({ where: { userId: req.user!.id } }),
+      prisma.scheme.findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: { publishedAt: 'desc' },
+        include: {
+          ...schemeListInclude,
+          eligibilityRules: { orderBy: { sortOrder: 'asc' } },
+        },
+      }),
+    ]);
+
+    const evaluated = schemes.map((scheme) => ({
+      scheme,
+      eligibility: evaluateEligibility(scheme.eligibilityRules, profile, language),
+    }));
+
+    const countsByAssessment: Record<string, number> = {
+      LIKELY_ELIGIBLE: 0,
+      NEEDS_INFORMATION: 0,
+      NOT_ELIGIBLE: 0,
+      NOT_ASSESSABLE: 0,
+    };
+    for (const entry of evaluated) {
+      countsByAssessment[entry.eligibility.assessment] += 1;
+    }
+
+    const missingFields = [
+      ...new Set(evaluated.flatMap((entry) => entry.eligibility.missingProfileFields)),
+    ];
+
+    evaluated.sort((left, right) => {
+      const rank =
+        (ASSESSMENT_RANK[left.eligibility.assessment] ?? 99) -
+        (ASSESSMENT_RANK[right.eligibility.assessment] ?? 99);
+      if (rank !== 0) return rank;
+      const leftTime = left.scheme.publishedAt?.getTime() ?? 0;
+      const rightTime = right.scheme.publishedAt?.getTime() ?? 0;
+      return rightTime - leftTime;
+    });
+
+    const filtered =
+      query.filter === 'ALL'
+        ? evaluated
+        : evaluated.filter((entry) => entry.eligibility.assessment === query.filter);
+
+    const start = (query.page - 1) * query.pageSize;
+    const page = filtered.slice(start, start + query.pageSize);
+
+    res.json({
+      language,
+      filter: query.filter,
+      profile: {
+        hasProfile: Boolean(profile),
+        onboardingCompleted: profile?.onboardingCompleted ?? false,
+        missingFields,
+      },
+      summary: {
+        totalPublished: evaluated.length,
+        countsByAssessment,
+      },
+      schemes: page.map((entry) => ({
+        ...shapeSchemeSummary(entry.scheme, language),
+        eligibility: {
+          assessment: entry.eligibility.assessment,
+          label: entry.eligibility.label,
+          likelyEligible: entry.eligibility.likelyEligible,
+          counts: entry.eligibility.counts,
+          missingProfileFields: entry.eligibility.missingProfileFields,
+        },
+      })),
+      pagination: {
+        page: query.page,
+        pageSize: query.pageSize,
+        total: filtered.length,
+        totalPages: Math.max(1, Math.ceil(filtered.length / query.pageSize)),
+      },
+      disclaimer: eligibilityDisclaimer(language),
+    });
   }),
 );
 
