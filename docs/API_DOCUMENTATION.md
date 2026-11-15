@@ -382,7 +382,52 @@ Fields are merged into the existing translation object. `provider` is `HUMAN|AI|
 `REVIEWED` or `VERIFIED` records the reviewing user and timestamp. Seeded AI translations start
 as `DRAFT`.
 
+### Monitoring and extraction (`/admin/monitoring`)
+
+All endpoints require `SCHEME_VERIFIER`, `ADMIN` or `SUPER_ADMIN`; running a source is **ADMIN+**.
+Only the labelled `DEMO` source has an adapter. Real sources are listed with `monitoring.canRun=false`
+and a reason; running them returns `409` rather than attempting an unapproved integration.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/admin/monitoring/sources` | Verifier+ | Sources with check timestamps, errors and `monitoring { canRun, adapter, reason }`. |
+| POST | `/admin/monitoring/sources/:id/run` | **ADMIN+** | Run the source adapter synchronously. Returns `201` on `SUCCESS`, `200` on `FAILED`. Rejects disabled/unconfigured sources with `409`. |
+| GET | `/admin/monitoring/jobs` | Verifier+ | Paginated jobs. Query: `page`, `pageSize` (≤100), `status`, `sourceId`. Returns `countsByStatus`. |
+| GET | `/admin/monitoring/jobs/:id` | Verifier+ | Job with its extraction results. |
+| GET | `/admin/monitoring/extractions` | Verifier+ | Review queue. Query: `page`, `pageSize`, `status` (`PENDING|APPROVED|REJECTED`), `needsReview=true|false`, `sourceId`. Returns `countsByReviewStatus`. |
+| GET | `/admin/monitoring/extractions/:id` | Verifier+ | One extraction with parsed `fields`, `provenance` and linked scheme. |
+| POST | `/admin/monitoring/extractions/:id/review` | Verifier+ | Approve or reject an extraction. |
+
+Run response highlights:
+
+```json
+{
+  "result": { "status": "SUCCESS", "itemsFound": 2, "createdExtractions": 2, "skippedDuplicates": 0 },
+  "job": { "id": "…", "status": "SUCCESS", "counts": { "extractions": 2 } }
+}
+```
+
+Each extraction stores `sourceUrl`, `rawDocumentId` (external item ID), `model`, `confidence` (null for
+the demo), `needsReview`, `reviewStatus`, parsed `fields` and `provenance` (`adapter`, `feedVersion`,
+`demo`, `fetchedAt`, `externalId`). Repeat runs skip items already ingested from the same source.
+
+Review body:
+
+```json
+{ "action": "APPROVE", "notes": "Checked against demo fixture", "fields": { "categorySlug": "agriculture" } }
+```
+
+- `action` is `APPROVE` or `REJECT`; only `PENDING` extractions can be reviewed (`409` otherwise).
+- `fields` optionally overrides/adds extracted values. Approval requires `titleEn`, `summaryEn`,
+  `benefitsEn`, `department` and a known `categorySlug` (`400` with details if missing).
+- `REJECT` marks the extraction reviewed, records notes/reviewer and creates nothing.
+- `APPROVE` creates a **`PENDING_VERIFICATION`** scheme (never auto-published) with a version-1
+  snapshot, eligibility rules, `isDemoData` inherited from a `DEMO` source, and a `provider: DEMO`,
+  `quality: DRAFT` Kannada translation when authored Kannada fields exist. The extraction is linked
+  to the new scheme. Publication still requires verify + publish.
+
 ## Not yet implemented
 
-Notifications, analytics, assistance centres, monitoring administration, document upload/OCR,
-application tracking and the AI voice assistant. These are tracked in `PROJECT_STATUS.md`.
+Notifications, analytics, assistance centres, real government source retrieval/OCR/machine
+translation, document upload, application tracking and the AI voice assistant. These are tracked in
+`PROJECT_STATUS.md`.

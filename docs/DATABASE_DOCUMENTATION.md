@@ -5,7 +5,8 @@
 - ORM: Prisma 6.
 - Local development: SQLite (`server/prisma/dev.db`, gitignored).
 - Production target: PostgreSQL.
-- Migrations: `server/prisma/migrations/` (committed). Initial migration `20261115172938_init`.
+- Migrations: `server/prisma/migrations/` (committed). Initial migration `20261115172938_init`;
+  Phase 5 added `20261115232738_extraction_review_status` (review status/notes on extractions).
 
 ## Models (21)
 
@@ -32,8 +33,8 @@
 | 16 | `AssistanceCentre` | CSC/Panchayat/office directory | indexes on `(district, taluk)`, `type` |
 | 17 | `AssistanceRequest` | Citizen support requests | indexes on `status`, `centreId` |
 | 18 | `Feedback` | Scheme/citizen feedback | indexes on `schemeId`, `status` |
-| 19 | `MonitoringJob` | Scheduled source checks + retries | indexes on `sourceId`, `status`, `createdAt` |
-| 20 | `ExtractionResult` | AI extraction output + review flag | `schemeId` unique optional; index on `needsReview` |
+| 19 | `MonitoringJob` | Source check runs and failures | indexes on `sourceId`, `status`, `createdAt` |
+| 20 | `ExtractionResult` | Extracted fields + provenance + review decision | `schemeId` unique optional; indexes on `needsReview`, `reviewStatus` |
 | 21 | `VerificationRecord` | Admin approve/reject history | indexes on `schemeId`, `verifierId` |
 
 ## Key relationships
@@ -65,7 +66,7 @@ SQLite has no native enum/JSON types, so these are `String` columns containing v
 | `EligibilityRule.valueJson` | scalar or `string[]` |
 | `SchemeTranslation.fieldsJson` | `{ title, summary, benefits, eligibility, applicationProcess }` |
 | `SchemeVersion.snapshotJson` | flat snapshot object |
-| `ExtractionResult.extractedJson` | field→value map with provenance |
+| `ExtractionResult.extractedJson` | `{ adapter, feedVersion, demo, fetchedAt, source, externalId, fields }` |
 | `CitizenProfile.profileJson` | free-form eligibility answers |
 | `NotificationPreference.categoriesJson` / `districtsJson` | `string[]` |
 | `AuditLog.metadataJson` | object |

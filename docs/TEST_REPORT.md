@@ -1,6 +1,6 @@
 # TEST REPORT
 
-Date: 2026-11-15
+Date: 2026-11-16
 Environment: Windows (win32), Node v26.13.1, npm 11.20.0
 Database under test: SQLite `server/prisma/dev.db` (smoke) and dedicated `server/prisma/test.db` (automated tests)
 
@@ -12,19 +12,20 @@ Database under test: SQLite `server/prisma/dev.db` (smoke) and dedicated `server
 | Production build | `npm run build` | **PASS** (`dist/index.js` emitted) |
 | Seed (first run) | `npm run seed` | **PASS** — 16 categories, 7 sources, 5 users, 12 schemes created |
 | Seed (second run, idempotency) | `npm run seed` | **PASS** — 0 created, 12 updated |
-| Automated API tests | `npm run test` | **PASS** — 49/49 tests, 3 files |
+| Automated API tests | `npm run test` | **PASS** — 59/59 tests, 4 files |
 | Live API smoke test | start server + HTTP calls | **PASS** (Phase 2 baseline; later phases exercised through Supertest) |
 | Prisma schema validation | implicit in `generate`/`migrate`/`db push` | **PASS** |
 
 ## Automated tests (Vitest 2.1.9 + Supertest)
 
 ```
-✓ tests/schemes.test.ts (14 tests) 1204ms
-✓ tests/eligibility.test.ts (17 tests) 1018ms
-✓ tests/auth.test.ts (18 tests) 538ms
-Test Files  3 passed (3)
-Tests       49 passed (49)
-Duration    7.61s
+✓ tests/schemes.test.ts (14 tests) 1339ms
+✓ tests/eligibility.test.ts (17 tests) 1095ms
+✓ tests/monitoring.test.ts (10 tests) 1208ms
+✓ tests/auth.test.ts (18 tests) 571ms
+Test Files  4 passed (4)
+Tests       59 passed (59)
+Duration    9.64s
 ```
 
 Coverage of behaviour:
@@ -75,6 +76,19 @@ Coverage of behaviour:
 40. Eligibility APIs require auth, hide unpublished schemes, return localized explanations and the
     disclaimer, and matching supports filters, ranking, pagination, summary counts and missing-field
     hints (including the no-profile case). `/api/meta` exposes fields/operators/assessments.
+41. Monitoring access is verifier+ for reads/reviews and admin-only for runs; citizens receive `403`.
+42. Source listing reports adapter availability honestly: demo runs are allowed, unconfigured and
+    disabled sources are refused without creating jobs.
+43. A demo run creates a `SUCCESS` job, two extraction results, records source check timestamps and
+    stores source URL, external ID, model and demo provenance on each extraction.
+44. Repeat runs skip already-ingested external IDs without duplicating jobs' extraction rows.
+45. Job/extraction listings filter by status/source, expose review-queue counts and reject unknown
+    IDs with `404`.
+46. Approval creates a pending (never public) demo scheme with rules, version snapshot and a
+    `DEMO`/`DRAFT` Kannada translation; it can then be verified/published and appears publicly with
+    `isDemoData=true`; rejections create no scheme; missing fields/unknown categories return `400`;
+    reviewed extractions cannot be approved twice (`409`); reviewer field corrections are applied;
+    `EXTRACTION_APPROVED` is audited.
 
 Test isolation: the global setup runs `prisma db push --force-reset` **only** against the dedicated
 `prisma/test.db`. The development database is never reset by tests. Every test calls the shared
@@ -99,10 +113,10 @@ translations=12, eligibilityRules=18`.
 ## Not yet tested (features not built)
 
 - Citizen/admin UI (no frontend exists yet).
-- Monitoring pipeline, OCR/AI extraction, automated translation, notifications, analytics, voice
-  assistant.
-- Load/performance testing, penetration testing, accessibility audit.
-- Multi-instance rate limiting / shared cache behaviour.
+- Monitoring is exercised only against the local demo adapter; real government retrieval, OCR/AI
+  extraction, automated translation, notifications, analytics and the voice assistant are not built.
+- No load/performance testing, penetration testing or accessibility audit.
+- Multi-instance rate limiting / shared cache behaviour is untested.
 
 ## Known test limitations
 
@@ -110,4 +124,6 @@ translations=12, eligibilityRules=18`.
   operators/fields when verified notices are ingested.
 - Matching evaluates every published scheme in memory (fine at the current catalogue size).
 - Tests run sequentially in a single fork for deterministic database state.
+- Monitoring tests use the authored demo feed; adapter failure/retry paths are not exercised because
+  real adapters do not exist yet.
 - No coverage threshold configured yet.

@@ -1,11 +1,12 @@
 # PROJECT_STATUS
 
-Last updated: 2026-11-15
+Last updated: 2026-11-16
 
 ## Current development phase
 
-**Phases 0–4 complete**: foundation (safety, database, auth/RBAC), public discovery plus admin
-scheme management, and the eligibility assessment engine.
+**Phases 0–5 complete**: foundation (safety, database, auth/RBAC), public discovery plus admin
+scheme management, the eligibility assessment engine, and a monitoring/extraction review pipeline
+that runs against a clearly labelled local demo feed.
 
 > The master plan lists UI as Phase 2 and database as Phase 3. Based on the approved audit
 > decisions (empty repository, no PostgreSQL/Redis), work started with safety, database and
@@ -81,11 +82,28 @@ scheme management, and the eligibility assessment engine.
 - 49 automated tests total across 3 files (17 new eligibility tests, including operator and
   missing-data edge cases) — all passing.
 
+### Phase 5 — Monitoring engine & extraction pipeline
+- Source adapters are explicit: only the labelled `DEMO` source has an adapter today. Admin runs
+  against real sources are refused with a clear reason instead of attempting untested scraping.
+- Local demo feed (`src/lib/demoFeed.ts`) with two clearly illustrative items, authored Kannada
+  fields, a feed version and per-item provenance. No external network calls are made.
+- Admin monitoring API under `/api/admin/monitoring` (SCHEME_VERIFIER+; run is ADMIN+):
+  source availability, synchronous runs, job list/detail, extraction queue/detail and review.
+- Each run stores a `MonitoringJob` and `ExtractionResult` records with source URL, external ID,
+  adapter/model, fetched timestamp and provenance. Repeat runs skip already-ingested items.
+- Approving an extraction creates a `PENDING_VERIFICATION` scheme (never auto-published) with a
+  version-1 snapshot, eligibility rules, demo flag inherited from the source, and a
+  `provider: DEMO`, `quality: DRAFT` Kannada translation when authored Kannada exists.
+  Rejections record the reviewer, timestamp and notes; reviewed items cannot be processed twice.
+- Optional in-process scheduler controlled by `MONITORING_WORKER_ENABLED` (default off) and
+  `MONITORING_POLL_MINUTES`; it only checks due demo sources. Manual runs always remain available.
+- 59 automated tests total across 4 files (10 new monitoring tests) — all passing.
+
 ## Not started
 
 - Citizen web UI (Kannada-first React application).
-- Government monitoring engine, OCR/AI extraction, translation pipeline (admin review UI exists at
-  the API level; automated ingestion does not).
+- Government source retrieval, OCR/AI extraction and machine translation (only the demo adapter and
+  human/demo-authored extraction review exist; real integrations are not configured).
 - AI voice assistant, application assistant.
 - Notification delivery (in-app/Web Push/SMS/WhatsApp), analytics, village assistance, PWA/offline.
 
@@ -98,7 +116,9 @@ scheme management, and the eligibility assessment engine.
 3. No email/phone verification (OTP) yet; accounts are verified by possession of the email only.
 4. Access tokens are stateless and cannot be revoked individually before expiry (no refresh/denylist yet).
 5. Rate limiting is in-memory; multi-instance deployments need a shared store (e.g. Redis).
-6. No background job runner yet — monitoring jobs are modelled but not executed.
+6. The monitoring scheduler is opt-in and in-process (`MONITORING_WORKER_ENABLED=false` by default).
+   Only the labelled `DEMO` source has an adapter; no government source is fetched, and multiple
+   instances would need an external job queue/lock.
 7. Seeded scheme content is illustrative (`isDemoData`), translations are AI drafts (`quality = DRAFT`).
    Public responses expose `isDemoData`; UI must never present demo records as official notices.
 8. Scheme `views` increments on every public detail request without deduplication; treat it as a
@@ -118,11 +138,18 @@ scheme management, and the eligibility assessment engine.
 14. Prisma 6 emits a deprecation warning for `package.json#prisma` (seed config); migrate to
     `prisma.config.ts` before Prisma 7.
 15. The repository has no CI pipeline yet.
+16. Monitoring runs are synchronous and have no retry/backoff or conditional-request support yet.
+    Failures are stored on the job and source (when an adapter is configured), but the scheduler
+    simply tries again on the next due interval.
+17. Extraction approval is a human review step, not verification. Created schemes remain
+    `PENDING_VERIFICATION`; demo-authored extractions inherit `isDemoData = true` and must never be
+    presented as official notices.
+18. Extraction deduplication uses source + external item ID. A changed document that reuses the
+    same ID is not re-ingested automatically.
 
 ## Next actions (approved sequence)
 
-1. **Phase 5:** Monitoring engine + extraction/translation pipeline (enables the end-to-end
-   acceptance scenario; admin verification and eligibility APIs already exist).
-2. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard.
-3. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
+1. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard (including monitoring/extraction
+   review screens backed by the existing APIs).
+2. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
    hardening, deployment.

@@ -2,7 +2,7 @@
 
 AI-powered government scheme awareness and livelihood assistance platform for rural citizens in India. Kannada-first, mobile-first, built for Karnataka with support for English and Hindi.
 
-> **Status:** Early development. Backend foundation and APIs (Phases 0–4: auth/RBAC, discovery, admin scheme workflow, eligibility assessment) are implemented. The citizen UI is not built yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status:** Early development. Backend foundation and APIs (Phases 0–5: auth/RBAC, discovery, admin scheme workflow, eligibility assessment, demo monitoring/extraction review) are implemented. The citizen UI is not built yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Repository layout
 
@@ -19,7 +19,7 @@ grama-sahay/
 
 - Node.js 20+ (tested on 26)
 - npm 10+
-- No PostgreSQL/Redis/Docker required for local development (SQLite + in-process scheduler later)
+- No PostgreSQL/Redis/Docker required for local development (SQLite + optional in-process scheduler)
 
 ## Quick start
 
@@ -37,6 +37,10 @@ Check the API is up:
 ```bash
 curl http://localhost:4000/api/health
 ```
+
+Monitoring is admin-triggered and only the clearly labelled `demo-feed` source has an adapter
+(`POST /api/admin/monitoring/sources/:id/run`). No government source is fetched. Set
+`MONITORING_WORKER_ENABLED=true` to check due demo sources on an interval.
 
 ## Demo accounts (after `npm run seed`)
 

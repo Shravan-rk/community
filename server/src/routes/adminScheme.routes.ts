@@ -17,6 +17,7 @@ import {
 import { authenticate } from '../middleware/authenticate.js';
 import { requireRole } from '../middleware/requireRole.js';
 import { validate } from '../middleware/validate.js';
+import { slugify, uniqueSchemeSlug } from '../lib/slug.js';
 
 const router = Router();
 
@@ -154,18 +155,6 @@ const detailQuerySchema = z.object({ language: z.enum(LANGUAGES).default('kn') }
 
 type RuleInput = z.infer<typeof ruleSchema>;
 
-function slugify(input: string): string {
-  const base = input
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/[\s_]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 80);
-  return base || 'scheme';
-}
-
 function rulesToRows(rules: RuleInput[]) {
   return rules.map((rule, index) => ({
     field: rule.field,
@@ -210,16 +199,6 @@ function comparableExistingRules(
     isRequired: rule.isRequired,
     sortOrder: rule.sortOrder,
   }));
-}
-
-async function uniqueSlug(base: string): Promise<string> {
-  let candidate = base;
-  for (let attempt = 2; attempt <= 60; attempt += 1) {
-    const existing = await prisma.scheme.findUnique({ where: { slug: candidate }, select: { id: true } });
-    if (!existing) return candidate;
-    candidate = `${base}-${attempt}`;
-  }
-  throw AppError.conflict('Could not derive a unique slug. Provide an explicit slug.');
 }
 
 async function resolveCategoryId(slug: string): Promise<string> {
@@ -353,7 +332,7 @@ router.post(
     const body = req.body as z.infer<typeof createSchema>;
     const categoryId = await resolveCategoryId(body.categorySlug);
     const sourceId = body.sourceSlug ? await resolveSourceId(body.sourceSlug) : null;
-    const slug = body.slug ?? (await uniqueSlug(slugify(body.titleEn)));
+    const slug = body.slug ?? (await uniqueSchemeSlug(slugify(body.titleEn)));
     if (body.slug) {
       const existing = await prisma.scheme.findUnique({ where: { slug: body.slug }, select: { id: true } });
       if (existing) throw AppError.conflict('A scheme with this slug already exists.');

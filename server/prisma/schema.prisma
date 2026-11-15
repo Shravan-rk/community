@@ -480,12 +480,16 @@ model ExtractionResult {
   confidence     Float?
   model          String?
   needsReview    Boolean  @default(true)
+  // PENDING | APPROVED | REJECTED
+  reviewStatus   String   @default("PENDING")
+  reviewNotes    String?
   reviewedById   String?
   reviewedBy     User?    @relation("ExtractionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt     DateTime?
   createdAt      DateTime @default(now())
 
   @@index([needsReview])
+  @@index([reviewStatus])
   @@index([monitoringJobId])
 }
 

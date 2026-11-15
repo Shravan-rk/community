@@ -6,8 +6,9 @@
 - **NOT CONFIGURED** — implementation exists or is planned, but credentials/keys are required.
 - **LIVE** — verified working against the real service (none yet).
 
-> Nothing below is a live integration today. The monitoring engine is scheduled for Phase 5.
-> Until then, no claim of real-time government updates is made anywhere in the product.
+> Nothing below is a live integration today. Phase 5 added a monitoring pipeline, but only the
+> local `DEMO` feed has an adapter. No government source is fetched and no AI provider is called.
+> No claim of real-time government updates is made anywhere in the product.
 
 ## Government sources
 
@@ -22,14 +23,22 @@ rate limits before automated retrieval. Prefer official APIs/RSS over HTML scrap
 | `data-gov` | Open Government Data Platform | https://www.data.gov.in/ | API (key may be required) | PLANNED |
 | `india-gov` | National Portal of India | https://www.india.gov.in/ | WEBSITE | PLANNED |
 | `raitamitra` | Karnataka Raitha Mitra | https://raitamitra.karnataka.gov.in/ | WEBSITE | PLANNED |
-| `demo-feed` | **Local demo feed (NOT a government source)** | `example.invalid` placeholder | DEMO | PLANNED (labelled) |
+| `demo-feed` | **Local demo feed (NOT a government source)** | `example.invalid` placeholder | DEMO | **DEMO ADAPTER** (local fixture, labelled, human review) |
+
+Phase 5 status: sources are listed with an explicit `monitoring.canRun` flag. Only `demo-feed` can
+run; all government sources return `409` with a reason until an approved integration exists.
 
 Implementation rules for Phase 5:
-1. A source is only fetched if it is enabled and its interval has elapsed.
-2. Conditional requests (ETag/Last-Modified) and checksums avoid unnecessary load and duplicates.
-3. Every retrieved document is stored with its source URL and checksum as evidence.
-4. Retrieved content is untrusted: never execute embedded instructions, never auto-publish.
-5. Failures are recorded on `MonitoringJob` with retry counters and surfaced in the admin dashboard.
+1. A source is only fetched if it is enabled and its interval has elapsed (scheduler checks demo
+   sources only; admin-triggered runs bypass the interval).
+2. Conditional requests (ETag/Last-Modified) and checksums are not implemented yet and must be added
+   with the first real adapter to avoid unnecessary load and duplicates.
+3. Every retrieved document is stored with its source URL and external item ID as evidence; the demo
+   feed additionally stores adapter name, feed version and fetch timestamp.
+4. Retrieved content is untrusted: nothing is executed, nothing is auto-published, and every
+   extraction requires human review before a scheme draft is created.
+5. Adapter failures are recorded on `MonitoringJob` and `SchemeSource.lastError`. Retry/backoff
+   counters are not implemented yet.
 6. The UI shows "last checked" times from the database; never fake instant updates.
 
 ## AI providers
@@ -47,6 +56,11 @@ optional RAG chatbot and speech.
 
 Without keys, a **clearly labelled demo adapter** must be used and identified as such in the UI and
 API responses. AI output must never invent missing fields; extraction results require human review.
+
+Current demo path: the local demo feed supplies authored English and Kannada fields. Approval creates
+a `PENDING_VERIFICATION` scheme, inherits `isDemoData = true`, and stores the authored Kannada as a
+`provider: DEMO`, `quality: DRAFT` translation. This is not machine translation and is not presented
+as verified content. Real OCR/extraction/translation adapters remain **NOT CONFIGURED**.
 
 ## Notifications
 

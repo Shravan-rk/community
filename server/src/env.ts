@@ -15,6 +15,12 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
   STAFF_INVITE_CODE: z.string().min(8, 'STAFF_INVITE_CODE must be at least 8 characters'),
   ADMIN_INVITE_CODE: z.string().min(8, 'ADMIN_INVITE_CODE must be at least 8 characters'),
+  MONITORING_WORKER_ENABLED: z
+    .string()
+    .optional()
+    .default('false')
+    .transform((value) => ['1', 'true', 'yes'].includes(value.toLowerCase())),
+  MONITORING_POLL_MINUTES: z.coerce.number().int().min(1).max(1440).default(15),
 });
 
 const parsed = envSchema.safeParse(process.env);

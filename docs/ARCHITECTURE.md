@@ -13,10 +13,12 @@
                                         │ SQLite (dev) → PostgreSQL (production)  │
                                         └─────────────────────────────────────────┘
 
-Planned services (later phases):
-  Scheduler / worker ──► source fetcher ──► OCR ──► LLM extraction ──► translation
-        │                                              │
-        └──► monitoring jobs / retries                  └──► verification queue (admin)
+Monitoring (Phase 5: demo adapter only):
+  optional scheduler ──► demo feed adapter ──► extraction queue ──► human review ──► scheme draft
+                                                                        │
+                                                                        └──► verify ──► publish (admin)
+Planned later:
+  real fetcher ──► OCR ──► LLM extraction ──► translation ──► verification queue
 ```
 
 ## Frontend (planned, Phase 6)
@@ -42,6 +44,11 @@ Planned services (later phases):
   cases, separates required from optional rules and returns honest outcomes
   (`LIKELY_ELIGIBLE`, `NOT_ELIGIBLE`, `NEEDS_INFORMATION`, `NOT_ASSESSABLE`) with explanations and
   a disclaimer. It never calls an external service at request time.
+- Monitoring (`src/lib/monitoring.ts`) has an explicit adapter boundary. The only adapter is the
+  local, labelled demo feed; unsupported real sources are refused before a job is created. A run
+  records a `MonitoringJob` and provenance-rich `ExtractionResult` rows, deduplicated by source +
+  external item ID. Review approval creates a `PENDING_VERIFICATION` scheme; publication remains a
+  separate admin action. The optional scheduler is in-process and disabled by default.
 - Output: JSON REST API under `/api`. OpenAPI/Swagger is a future addition.
 
 ## Database
@@ -58,14 +65,19 @@ Planned services (later phases):
 - Human review is mandatory before publication (`ExtractionResult.needsReview`,
   `SchemeTranslation.quality`, `VerificationRecord`).
 - Without API keys the system must use a clearly labelled demo adapter, not a fake live integration.
+  The Phase 5 demo feed supplies authored English/Kannada fields; approval stores Kannada as a
+  `DEMO`/`DRAFT` translation, never as verified machine translation.
 
-## Background jobs (planned, Phase 5)
+## Background jobs (Phase 5, opt-in)
 
-- No Redis is installed; the first implementation will use a database-backed scheduler/worker
-  with retry counters (`MonitoringJob.attempt`, `status`), behind a queue interface so BullMQ/Redis
-  can be added for scale.
-- Jobs will respect robots.txt/terms of service, use conditional requests, and never claim
-  real-time updates that the source does not provide.
+- An in-process scheduler (`src/lib/monitoringScheduler.ts`) is gated by
+  `MONITORING_WORKER_ENABLED` (default `false`) and `MONITORING_POLL_MINUTES`. It only checks due
+  `DEMO` sources; admin-triggered runs work without it.
+- Runs are synchronous. `MonitoringJob` records status/timestamps/errors, but retry/backoff and
+  distributed locking are not implemented. Real adapters must add conditional requests and respect
+  robots.txt/terms of service before being enabled.
+- For scale, replace the interval with a queue (BullMQ/Redis or a database-backed worker) behind the
+  same adapter boundary.
 
 ## External integrations
 
