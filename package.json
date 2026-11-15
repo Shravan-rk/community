@@ -1,0 +1,17 @@
+{
+  "name": "grama-sahay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GRAMA SAHAY - AI-powered government scheme awareness and livelihood assistance platform",
+  "scripts": {
+    "install:all": "npm --prefix server install",
+    "dev": "npm --prefix server run dev",
+    "build": "npm --prefix server run build",
+    "start": "npm --prefix server run start",
+    "typecheck": "npm --prefix server run typecheck",
+    "test": "npm --prefix server run test",
+    "seed": "npm --prefix server run seed",
+    "db:push": "npm --prefix server run db:push",
+    "db:migrate": "npm --prefix server run db:migrate"
+  }
+}

@@ -1,0 +1,506 @@
+// GRAMA SAHAY database schema
+// Local development: SQLite. Production target: PostgreSQL (see docs/DATABASE_DOCUMENTATION.md).
+// SQLite notes: enums/JSON/arrays are represented as validated String columns. The values are
+// enforced in the API layer (Zod) and documented in DATABASE_DOCUMENTATION.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity & access
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String
+  fullName     String
+  // CITIZEN | VILLAGE_FACILITATOR | SCHEME_VERIFIER | ADMIN | SUPER_ADMIN
+  role         String   @default("CITIZEN")
+  isActive     Boolean  @default(true)
+  // kn | en | hi
+  preferredLanguage String @default("kn")
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  citizenProfile         CitizenProfile?
+  consents               UserConsent[]
+  savedSchemes           SavedScheme[]
+  applications           ApplicationRecord[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  auditLogs              AuditLog[]
+  assistanceRequests     AssistanceRequest[] @relation("AssistanceRequester")
+  assignedAssistance     AssistanceRequest[] @relation("AssistanceAssignee")
+  reviewedTranslations   SchemeTranslation[] @relation("TranslationReviewer")
+  reviewedExtractions    ExtractionResult[]  @relation("ExtractionReviewer")
+  verifications          VerificationRecord[] @relation("SchemeVerifier")
+  createdSchemes         Scheme[]            @relation("SchemeCreator")
+  createdVersions        SchemeVersion[]     @relation("VersionCreator")
+  feedback               Feedback[]
+
+  @@index([role])
+  @@index([createdAt])
+  @@index([isActive])
+}
+
+model CitizenProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dateOfBirth        DateTime?
+  // MALE | FEMALE | OTHER | PREFER_NOT_TO_SAY
+  gender             String?
+  state              String?  @default("Karnataka")
+  district           String?
+  taluk              String?
+  village            String?
+  gramPanchayat      String?
+  occupation         String?
+  annualIncome       Int? // whole rupees per year
+  education          String?
+  landHoldingAcres   Float?
+  familySize         Int?
+  disabilityStatus   Boolean?
+  // GENERAL | OBC | SC | ST | EWS | MINORITY
+  socialCategory     String?
+  // Data minimisation: never store a full Aadhaar number. Last 4 digits only.
+  aadhaarLast4       String?
+  // Extra structured answers for scheme-specific eligibility questions (JSON string).
+  profileJson        String?
+  onboardingCompleted Boolean @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([state])
+  @@index([district])
+}
+
+model UserConsent {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // e.g. DATA_PROCESSING, NOTIFICATIONS_SMS, NOTIFICATIONS_WHATSAPP, ANALYTICS
+  consentType String
+  granted     Boolean   @default(false)
+  version     String    @default("1.0")
+  grantedAt   DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, consentType])
+  @@index([consentType])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorRole  String?
+  action     String
+  entityType String
+  entityId   String?
+  metadataJson String?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Schemes & discovery
+// ---------------------------------------------------------------------------
+
+model SchemeCategory {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  nameEn        String
+  nameKn        String
+  nameHi        String
+  descriptionEn String?
+  icon          String?
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  schemes Scheme[]
+
+  @@index([isActive])
+}
+
+model SchemeSource {
+  id                        String    @id @default(cuid())
+  slug                      String    @unique
+  name                      String
+  baseUrl                   String
+  // WEBSITE | RSS | API | PDF | DEMO
+  sourceType                String
+  isActive                  Boolean   @default(true)
+  monitoringIntervalMinutes Int       @default(1440)
+  lastCheckedAt             DateTime?
+  lastSuccessAt             DateTime?
+  lastError                 String?
+  reliabilityScore          Int?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  schemes         Scheme[]
+  monitoringJobs  MonitoringJob[]
+
+  @@index([isActive])
+}
+
+model Scheme {
+  id                    String    @id @default(cuid())
+  slug                  String    @unique
+  titleEn               String
+  titleKn               String?
+  titleHi               String?
+  summaryEn             String
+  summaryKn             String?
+  summaryHi             String?
+  descriptionEn         String?
+  descriptionKn         String?
+  department            String
+  // CENTRAL | STATE
+  level                 String    @default("STATE")
+  state                 String?   @default("Karnataka")
+  categoryId            String
+  category              SchemeCategory @relation(fields: [categoryId], references: [id])
+  benefitsEn            String
+  benefitsKn            String?
+  eligibilityEn         String?
+  eligibilityKn         String?
+  // JSON array of required document strings
+  requiredDocumentsJson String?
+  applicationProcessEn  String?
+  applicationProcessKn   String?
+  applicationUrl        String?
+  officialUrl           String?
+  notificationNumber    String?
+  applicationDeadline   DateTime?
+  startDate             DateTime?
+  endDate               DateTime?
+  sourceId              String?
+  source                SchemeSource? @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  // DRAFT | PENDING_VERIFICATION | VERIFIED | PUBLISHED | REJECTED | EXPIRED
+  status                String    @default("PENDING_VERIFICATION")
+  isDemoData            Boolean   @default(false)
+  lastVerifiedAt        DateTime?
+  publishedAt           DateTime?
+  createdById           String?
+  createdBy             User?     @relation("SchemeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  version               Int       @default(1)
+  views                 Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  translations     SchemeTranslation[]
+  documents        SchemeDocument[]
+  versions         SchemeVersion[]
+  eligibilityRules EligibilityRule[]
+  savedBy          SavedScheme[]
+  applications     ApplicationRecord[]
+  notifications    Notification[]
+  extraction       ExtractionResult?
+  verifications    VerificationRecord[]
+  feedback         Feedback[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([state, status])
+  @@index([department])
+  @@index([publishedAt])
+}
+
+model SchemeVersion {
+  id            String   @id @default(cuid())
+  schemeId      String
+  scheme        Scheme   @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  version       Int
+  snapshotJson  String
+  changeSummary String?
+  createdById   String?
+  createdBy     User?    @relation("VersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@unique([schemeId, version])
+  @@index([schemeId])
+}
+
+model SchemeTranslation {
+  id           String    @id @default(cuid())
+  schemeId     String
+  scheme       Scheme    @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  // kn | en | hi (extensible)
+  language     String
+  // JSON object with translated fields (title, summary, benefits, ...)
+  fieldsJson   String
+  // HUMAN | AI | MACHINE
+  provider     String    @default("AI")
+  // DRAFT | REVIEWED | VERIFIED
+  quality      String    @default("DRAFT")
+  reviewedById String?
+  reviewedBy   User?     @relation("TranslationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([schemeId, language])
+  @@index([quality])
+}
+
+model EligibilityRule {
+  id             String   @id @default(cuid())
+  schemeId       String
+  scheme         Scheme   @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  // age | annualIncome | occupation | gender | education | landHoldingAcres | socialCategory | disabilityStatus | state | district | familySize
+  field          String
+  // GTE | LTE | EQ | NEQ | IN | CONTAINS | EXISTS
+  operator       String
+  // JSON encoded operand, e.g. "60" or ["SC","ST"]
+  valueJson      String
+  descriptionEn  String?
+  descriptionKn  String?
+  isRequired     Boolean  @default(true)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  @@index([schemeId])
+  @@index([field])
+}
+
+model SchemeDocument {
+  id           String    @id @default(cuid())
+  schemeId     String
+  scheme       Scheme    @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  title        String
+  fileUrl      String?
+  // PDF | IMAGE | WEBPAGE
+  fileType     String?
+  checksum     String?
+  sizeBytes    Int?
+  sourceUrl    String?
+  fetchedAt    DateTime?
+  extractedText String?
+  // PENDING | DONE | FAILED | SKIPPED
+  ocrStatus    String    @default("PENDING")
+  createdAt    DateTime  @default(now())
+
+  @@index([schemeId])
+  @@index([ocrStatus])
+}
+
+model SavedScheme {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schemeId  String
+  scheme    Scheme   @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, schemeId])
+  @@index([schemeId])
+}
+
+// ---------------------------------------------------------------------------
+// Applications, notifications & assistance
+// ---------------------------------------------------------------------------
+
+model ApplicationRecord {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schemeId        String
+  scheme          Scheme    @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  // DRAFT | ASSISTED | SUBMITTED_OFFLINE | TRACKING | COMPLETED | REJECTED
+  status          String    @default("DRAFT")
+  referenceNumber String?
+  notes           String?
+  documentsJson   String?
+  submittedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([schemeId])
+  @@index([status])
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schemeId   String?
+  scheme     Scheme?   @relation(fields: [schemeId], references: [id], onDelete: SetNull)
+  title      String
+  body       String
+  language   String    @default("kn")
+  // SCHEME_UPDATE | NEW_SCHEME | DEADLINE | APPLICATION | SYSTEM
+  type       String    @default("SCHEME_UPDATE")
+  // IN_APP | WEB_PUSH | SMS | WHATSAPP | EMAIL
+  channel    String    @default("IN_APP")
+  // PENDING | SENT | FAILED | READ
+  status     String    @default("PENDING")
+  readAt     DateTime?
+  sentAt     DateTime?
+  dedupeKey  String?   @unique
+  metadataJson String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, status])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inApp           Boolean  @default(true)
+  webPush         Boolean  @default(false)
+  sms             Boolean  @default(false)
+  whatsapp        Boolean  @default(false)
+  email           Boolean  @default(false)
+  categoriesJson  String?
+  districtsJson   String?
+  quietHoursStart Int?
+  quietHoursEnd   Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AssistanceCentre {
+  id           String   @id @default(cuid())
+  name         String
+  // CSC | GRAMA_PANCHAYAT | GOVERNMENT_OFFICE | NGO
+  type         String
+  address      String
+  district     String
+  taluk        String?
+  village      String?
+  phone        String?
+  email        String?
+  latitude     Float?
+  longitude    Float?
+  openingHours String?
+  verifiedAt   DateTime?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  requests AssistanceRequest[]
+
+  @@index([district, taluk])
+  @@index([type])
+}
+
+model AssistanceRequest {
+  id           String    @id @default(cuid())
+  userId       String?
+  user         User?     @relation("AssistanceRequester", fields: [userId], references: [id], onDelete: SetNull)
+  centreId     String?
+  centre       AssistanceCentre? @relation(fields: [centreId], references: [id], onDelete: SetNull)
+  subject      String
+  description  String
+  // OPEN | IN_PROGRESS | RESOLVED | CLOSED
+  status       String    @default("OPEN")
+  contactPhone String?
+  assignedToId String?
+  assignedTo   User?     @relation("AssistanceAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([status])
+  @@index([centreId])
+}
+
+model Feedback {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  schemeId  String?
+  scheme    Scheme?  @relation(fields: [schemeId], references: [id], onDelete: SetNull)
+  rating    Int?
+  message   String
+  // NEW | REVIEWED | RESOLVED
+  status    String   @default("NEW")
+  createdAt DateTime @default(now())
+
+  @@index([schemeId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Monitoring & verification pipeline
+// ---------------------------------------------------------------------------
+
+model MonitoringJob {
+  id          String    @id @default(cuid())
+  sourceId    String
+  source      SchemeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  // QUEUED | RUNNING | SUCCESS | FAILED
+  status      String    @default("QUEUED")
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  attempt     Int       @default(1)
+  itemsFound  Int       @default(0)
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  extractions ExtractionResult[]
+
+  @@index([sourceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ExtractionResult {
+  id             String   @id @default(cuid())
+  schemeId       String?  @unique
+  scheme         Scheme?  @relation(fields: [schemeId], references: [id], onDelete: SetNull)
+  monitoringJobId String?
+  monitoringJob  MonitoringJob? @relation(fields: [monitoringJobId], references: [id], onDelete: SetNull)
+  sourceUrl      String?
+  rawDocumentId  String?
+  // JSON: extracted fields with provenance. Never invent missing values.
+  extractedJson  String
+  confidence     Float?
+  model          String?
+  needsReview    Boolean  @default(true)
+  reviewedById   String?
+  reviewedBy     User?    @relation("ExtractionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([needsReview])
+  @@index([monitoringJobId])
+}
+
+model VerificationRecord {
+  id               String   @id @default(cuid())
+  schemeId         String
+  scheme           Scheme   @relation(fields: [schemeId], references: [id], onDelete: Cascade)
+  verifierId       String
+  verifier         User     @relation("SchemeVerifier", fields: [verifierId], references: [id], onDelete: Restrict)
+  // APPROVED | REJECTED | REQUEST_CHANGES
+  action           String
+  notes            String?
+  sourceEvidenceUrl String?
+  createdAt        DateTime @default(now())
+
+  @@index([schemeId])
+  @@index([verifierId])
+}

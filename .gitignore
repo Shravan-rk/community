@@ -1,0 +1,39 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+dist/
+build/
+coverage/
+
+# environment & secrets
+.env
+.env.*
+!.env.example
+
+# databases (never commit local data)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+prisma/*.db
+prisma/*.db-journal
+
+# logs & runtime
+logs/
+*.log
+npm-debug.log*
+.pids
+*.pid
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# uploads / retrieved government documents (untrusted content)
+uploads/
+storage/
