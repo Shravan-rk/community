@@ -6,6 +6,9 @@ import { prisma } from './db.js';
 import authRoutes from './routes/auth.routes.js';
 import citizenRoutes from './routes/citizen.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import adminSchemeRoutes from './routes/adminScheme.routes.js';
+import schemeRoutes from './routes/scheme.routes.js';
+import categoryRoutes from './routes/category.routes.js';
 import metaRoutes from './routes/meta.routes.js';
 import { apiLimiter } from './middleware/rateLimit.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
@@ -52,7 +55,10 @@ export function createApp() {
 
   app.use('/api/auth', authRoutes);
   app.use('/api/citizens', citizenRoutes);
+  app.use('/api/admin/schemes', adminSchemeRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/schemes', schemeRoutes);
+  app.use('/api/categories', categoryRoutes);
   app.use('/api/meta', metaRoutes);
 
   app.use(notFound);

@@ -4,7 +4,8 @@ Last updated: 2026-11-15
 
 ## Current development phase
 
-**Phases 0–2 complete** (foundation): safety/scaffolding, database schema + seed, backend authentication & RBAC.
+**Phases 0–3 complete**: foundation (safety, database, auth/RBAC) plus public scheme discovery and
+admin scheme management.
 
 > The master plan lists UI as Phase 2 and database as Phase 3. Based on the approved audit
 > decisions (empty repository, no PostgreSQL/Redis), work started with safety, database and
@@ -43,11 +44,31 @@ Last updated: 2026-11-15
 - Audit logging for registrations, logins, profile/preference/consent changes and admin actions.
 - 18 automated API tests (Vitest + Supertest) — all passing.
 
+### Phase 3 — Scheme discovery & management
+- Public `GET /api/categories`: active categories with published-scheme counts, localized names.
+- Public `GET /api/schemes`: paginated search/filter/sort over published schemes only
+  (`q`, category, department, level, state; sort by newest, popularity, deadline or title).
+  `pageSize` is capped at 50.
+- Public `GET /api/schemes/compare?slugs=a,b,c` (2–3 published schemes), `GET /api/schemes/:slug`
+  (increments views, includes parsed rules/documents/source) and
+  `GET /api/schemes/:slug/related`.
+- Kannada-first localization with explicit `fallbacks` and `availableLanguages`; no runtime
+  machine translation. English is returned only as a labelled fallback.
+- Citizen bookmarks: list/save/remove published schemes, idempotent saves, audit trail.
+- Admin scheme API under `/api/admin/schemes` (SCHEME_VERIFIER+):
+  list all statuses with counts, create (auto-slug, category/source resolution, rules),
+  detail with versions/verifications/translation reviews, diff-based PATCH with automatic
+  version snapshots, verification decisions, publish/expire (ADMIN+), version history and
+  translation editing with review quality.
+- Content edits to `PUBLISHED`/`VERIFIED` schemes force `PENDING_VERIFICATION` (publication
+  stamp cleared) so unverified changes never reach citizens.
+- 32 automated API tests total across 2 files — all passing.
+
 ## Not started
 
 - Citizen web UI (Kannada-first React application).
-- Scheme discovery API (search/filter/sort/bookmark/compare) and public scheme endpoints.
-- Government monitoring engine, OCR/AI extraction, translation pipeline, admin verification workflow.
+- Government monitoring engine, OCR/AI extraction, translation pipeline (admin review UI exists at
+  the API level; automated ingestion does not).
 - Eligibility engine, AI voice assistant, application assistant.
 - Notification delivery (in-app/Web Push/SMS/WhatsApp), analytics, village assistance, PWA/offline.
 
@@ -62,17 +83,23 @@ Last updated: 2026-11-15
 5. Rate limiting is in-memory; multi-instance deployments need a shared store (e.g. Redis).
 6. No background job runner yet — monitoring jobs are modelled but not executed.
 7. Seeded scheme content is illustrative (`isDemoData`), translations are AI drafts (`quality = DRAFT`).
-8. Prisma 6 emits a deprecation warning for `package.json#prisma` (seed config); migrate to
-   `prisma.config.ts` before Prisma 7.
-9. The repository has no CI pipeline yet.
+   Public responses expose `isDemoData`; UI must never present demo records as official notices.
+8. Scheme `views` increments on every public detail request without deduplication; treat it as a
+   rough popularity signal, not analytics.
+9. Localized payloads prefer canonical Kannada/English columns over `SchemeTranslation` values.
+   Reviewed translations currently enrich fields missing from the base columns (e.g. descriptions);
+   they do not overwrite `titleKn`/`summaryKn`.
+10. Version snapshots capture scheme fields and eligibility rules; they do not yet include documents
+    or translations.
+11. Prisma 6 emits a deprecation warning for `package.json#prisma` (seed config); migrate to
+    `prisma.config.ts` before Prisma 7.
+12. The repository has no CI pipeline yet.
 
 ## Next actions (approved sequence)
 
-1. **Phase 3:** Public scheme discovery API — published schemes, categories, search/filter/sort,
-   Kannada/English/Hindi payloads, bookmarks, comparison; admin scheme CRUD with versioning.
-2. **Phase 4:** Eligibility engine (rule evaluation + explanations, no approval guarantees).
-3. **Phase 5:** Monitoring engine + extraction/translation pipeline + verification workflow
-   (enables the end-to-end acceptance scenario).
-4. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard.
-5. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
+1. **Phase 4:** Eligibility engine (rule evaluation + explanations, no approval guarantees).
+2. **Phase 5:** Monitoring engine + extraction/translation pipeline (enables the end-to-end
+   acceptance scenario; admin verification APIs already exist).
+3. **Phase 6:** Citizen UI (Kannada-first) and admin dashboard.
+4. Subsequent phases: voice assistant, applications/notifications, analytics/offline, security
    hardening, deployment.

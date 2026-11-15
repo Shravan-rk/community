@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { prisma } from '../src/db.js';
+import { resetDatabase } from './helpers/db.js';
 
 const app = createApp();
 
@@ -25,8 +26,7 @@ async function registerAndLogin(overrides: Partial<typeof CITIZEN> = {}) {
 }
 
 beforeEach(async () => {
-  await prisma.auditLog.deleteMany();
-  await prisma.user.deleteMany();
+  await resetDatabase();
 });
 
 describe('health and metadata', () => {

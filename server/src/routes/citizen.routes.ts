@@ -5,7 +5,10 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { AppError } from '../lib/errors.js';
 import { parseJsonArray } from '../lib/publicUser.js';
 import { recordAudit } from '../lib/audit.js';
+import { parseLanguage } from '../lib/language.js';
+import { schemeListInclude, shapeSchemeSummary } from '../lib/schemeContent.js';
 import { authenticate } from '../middleware/authenticate.js';
+import { validate } from '../middleware/validate.js';
 
 const router = Router();
 
@@ -252,6 +255,110 @@ router.put(
     );
 
     res.json({ consents: results });
+  }),
+);
+
+const savedSchemeSchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Provide a valid scheme slug.'),
+});
+
+const savedListQuerySchema = z.object({
+  language: z.enum(['kn', 'en', 'hi']).default('kn'),
+});
+
+router.get(
+  '/me/saved-schemes',
+  validate(savedListQuerySchema, 'query'),
+  asyncHandler(async (req, res) => {
+    const query = req.query as unknown as z.infer<typeof savedListQuerySchema>;
+    const language = parseLanguage(query.language);
+
+    const saved = await prisma.savedScheme.findMany({
+      where: { userId: req.user!.id },
+      orderBy: { createdAt: 'desc' },
+      include: { scheme: { include: schemeListInclude } },
+    });
+
+    res.json({
+      savedSchemes: saved.map((entry) => ({
+        savedAt: entry.createdAt,
+        isPublished: entry.scheme.status === 'PUBLISHED',
+        scheme: shapeSchemeSummary(entry.scheme, language),
+      })),
+    });
+  }),
+);
+
+router.post(
+  '/me/saved-schemes',
+  validate(savedSchemeSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof savedSchemeSchema>;
+
+    const scheme = await prisma.scheme.findUnique({
+      where: { slug: body.slug },
+      select: { id: true, slug: true, status: true },
+    });
+    if (!scheme) throw AppError.notFound('Scheme not found.');
+    if (scheme.status !== 'PUBLISHED') {
+      throw AppError.badRequest('Only published schemes can be saved.');
+    }
+
+    const existing = await prisma.savedScheme.findUnique({
+      where: { userId_schemeId: { userId: req.user!.id, schemeId: scheme.id } },
+    });
+    if (existing) {
+      res.json({ saved: true, alreadySaved: true, savedAt: existing.createdAt, schemeSlug: scheme.slug });
+      return;
+    }
+
+    const record = await prisma.savedScheme.create({
+      data: { userId: req.user!.id, schemeId: scheme.id },
+    });
+
+    await recordAudit(
+      {
+        action: 'SCHEME_SAVED',
+        entityType: 'SavedScheme',
+        entityId: record.id,
+        metadata: { schemeId: scheme.id, slug: scheme.slug },
+      },
+      req,
+    );
+
+    res.status(201).json({ saved: true, alreadySaved: false, savedAt: record.createdAt, schemeSlug: scheme.slug });
+  }),
+);
+
+router.delete(
+  '/me/saved-schemes/:slug',
+  asyncHandler(async (req, res) => {
+    const scheme = await prisma.scheme.findUnique({
+      where: { slug: req.params.slug },
+      select: { id: true, slug: true },
+    });
+    if (!scheme) throw AppError.notFound('Scheme not found.');
+
+    const result = await prisma.savedScheme.deleteMany({
+      where: { userId: req.user!.id, schemeId: scheme.id },
+    });
+    if (result.count === 0) throw AppError.notFound('This scheme is not in your saved list.');
+
+    await recordAudit(
+      {
+        action: 'SCHEME_UNSAVED',
+        entityType: 'SavedScheme',
+        metadata: { schemeId: scheme.id, slug: scheme.slug },
+      },
+      req,
+    );
+
+    res.json({ saved: false, schemeSlug: scheme.slug });
   }),
 );
 
