@@ -637,6 +637,91 @@ async function seedSchemes(categoriesById: Map<string, string>, sourcesById: Map
   return { created, updated };
 }
 
+async function seedOperations() {
+  const centres = [
+    {
+      id: 'seed-centre-bengaluru-south',
+      name: 'Demo CSC - Bengaluru South',
+      type: 'CSC',
+      address: 'Demo record: confirm the actual address with the district administration.',
+      district: 'Bengaluru Urban',
+      taluk: 'Bengaluru South',
+      openingHours: '10:00-17:00 (demo)',
+    },
+    {
+      id: 'seed-centre-mysuru',
+      name: 'Demo Gram Panchayat help desk - Mysuru',
+      type: 'GRAMA_PANCHAYAT',
+      address: 'Demo record: confirm the actual address with the district administration.',
+      district: 'Mysuru',
+      taluk: 'Mysuru',
+      openingHours: '10:00-17:00 (demo)',
+    },
+    {
+      id: 'seed-centre-belagavi',
+      name: 'Demo government office - Belagavi',
+      type: 'GOVERNMENT_OFFICE',
+      address: 'Demo record: confirm the actual address with the district administration.',
+      district: 'Belagavi',
+      taluk: 'Belagavi',
+      openingHours: '10:00-17:00 (demo)',
+    },
+    {
+      id: 'seed-centre-kalaburagi',
+      name: 'Demo NGO support desk - Kalaburagi',
+      type: 'NGO',
+      address: 'Demo record: confirm the actual address with the district administration.',
+      district: 'Kalaburagi',
+      taluk: 'Kalaburagi',
+      openingHours: '10:00-17:00 (demo)',
+    },
+  ] as const;
+
+  for (const centre of centres) {
+    await prisma.assistanceCentre.upsert({
+      where: { id: centre.id },
+      create: { ...centre, isActive: true },
+      update: {},
+    });
+  }
+
+  const citizen = await prisma.user.findUnique({ where: { email: 'citizen@gramasahay.local' } });
+  const pmKisan = await prisma.scheme.findUnique({ where: { slug: 'pm-kisan' } });
+
+  if (citizen && pmKisan) {
+    await prisma.applicationRecord.upsert({
+      where: { id: 'seed-app-citizen-pm-kisan' },
+      create: {
+        id: 'seed-app-citizen-pm-kisan',
+        userId: citizen.id,
+        schemeId: pmKisan.id,
+        status: 'DRAFT',
+        notes: 'Demo tracking record only. This is not an official application or reference number.',
+      },
+      update: {},
+    });
+
+    await prisma.notification.upsert({
+      where: { dedupeKey: 'seed-welcome-citizen' },
+      create: {
+        userId: citizen.id,
+        schemeId: pmKisan.id,
+        title: 'GRAMA SAHAY ಗೆ ಸ್ವಾಗತ',
+        body: 'ಇದು ಡೆಮೊ ಅಧಿಸೂಚನೆ. ಯೋಜನೆಯ ಎಲ್ಲಾ ವಿವರಗಳನ್ನು ಅಧಿಕೃತ ಸರ್ಕಾರಿ ಮೂಲದಲ್ಲಿ ಪರಿಶೀಲಿಸಿ.',
+        language: 'kn',
+        type: 'SYSTEM',
+        channel: 'IN_APP',
+        status: 'SENT',
+        sentAt: new Date(),
+        dedupeKey: 'seed-welcome-citizen',
+      },
+      update: {},
+    });
+  }
+
+  return centres.length;
+}
+
 async function main() {
   console.log('[seed] Starting GRAMA SAHAY seed...');
 
@@ -647,11 +732,13 @@ async function main() {
 
   const users = await seedUsers();
   const schemeResult = await seedSchemes(categoriesById, sourcesById);
+  const centreCount = await seedOperations();
 
   console.log(`[seed] Categories: ${categoryRows.length}`);
   console.log(`[seed] Sources: ${sourceRows.length}`);
   console.log(`[seed] Users: ${users.length} (passwords from SEED_* env vars)`);
   console.log(`[seed] Schemes: ${schemeResult.created} created, ${schemeResult.updated} updated (demo data)`);
+  console.log(`[seed] Assistance centres: ${centreCount} demo records`);
   console.log('[seed] Done. Demo scheme data is illustrative only - verify against official sources.');
 }
 

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import { env } from './env.js';
@@ -8,6 +8,11 @@ import citizenRoutes from './routes/citizen.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import adminSchemeRoutes from './routes/adminScheme.routes.js';
 import adminMonitoringRoutes from './routes/adminMonitoring.routes.js';
+import adminOperationsRoutes from './routes/adminOperations.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import applicationRoutes from './routes/application.routes.js';
+import feedbackRoutes from './routes/feedback.routes.js';
+import { centresRouter, assistanceRequestsRouter } from './routes/assistance.routes.js';
 import schemeRoutes from './routes/scheme.routes.js';
 import categoryRoutes from './routes/category.routes.js';
 import metaRoutes from './routes/meta.routes.js';
@@ -55,9 +60,15 @@ export function createApp() {
   app.use('/api', apiLimiter);
 
   app.use('/api/auth', authRoutes);
+  app.use('/api/citizens/me/notifications', notificationRoutes);
+  app.use('/api/citizens/me/applications', applicationRoutes);
   app.use('/api/citizens', citizenRoutes);
+  app.use('/api/assistance-centres', centresRouter);
+  app.use('/api/assistance-requests', assistanceRequestsRouter);
+  app.use('/api/feedback', feedbackRoutes);
   app.use('/api/admin/schemes', adminSchemeRoutes);
   app.use('/api/admin/monitoring', adminMonitoringRoutes);
+  app.use('/api/admin', adminOperationsRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/schemes', schemeRoutes);
   app.use('/api/categories', categoryRoutes);
@@ -68,3 +79,4 @@ export function createApp() {
 
   return app;
 }
+

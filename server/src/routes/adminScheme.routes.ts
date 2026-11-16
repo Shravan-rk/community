@@ -5,6 +5,7 @@ import { prisma } from '../db.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { AppError } from '../lib/errors.js';
 import { recordAudit } from '../lib/audit.js';
+import { createInAppNotification, localizedSchemePublished } from '../lib/notifications.js';
 import { parseLanguage, parseJsonObject, parseJsonValue } from '../lib/language.js';
 import { LANGUAGES, SCHEME_STATUSES } from '../lib/roles.js';
 import {
@@ -727,7 +728,15 @@ router.post(
   asyncHandler(async (req, res) => {
     const scheme = await prisma.scheme.findUnique({
       where: { id: req.params.id },
-      select: { id: true, status: true, publishedAt: true },
+      select: {
+        id: true,
+        status: true,
+        publishedAt: true,
+        version: true,
+        titleEn: true,
+        titleKn: true,
+        titleHi: true,
+      },
     });
     if (!scheme) throw AppError.notFound('Scheme not found.');
     if (scheme.status !== 'VERIFIED') {
@@ -739,6 +748,41 @@ router.post(
       where: { id: scheme.id },
       data: { status: 'PUBLISHED', publishedAt },
     });
+
+    const savedBy = await prisma.savedScheme.findMany({
+      where: { schemeId: scheme.id },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            preferredLanguage: true,
+            notificationPreference: { select: { inApp: true } },
+          },
+        },
+      },
+    });
+    await Promise.all(
+      savedBy
+        .filter((save) => save.user.notificationPreference?.inApp !== false)
+        .map((save) => {
+          const copy = localizedSchemePublished(
+            save.user.preferredLanguage,
+            scheme.titleEn,
+            scheme.titleKn,
+            scheme.titleHi,
+          );
+          return createInAppNotification({
+            userId: save.userId,
+            schemeId: scheme.id,
+            type: 'SCHEME_UPDATE',
+            language: copy.language,
+            title: copy.title,
+            body: copy.body,
+            dedupeKey: `scheme-published:${scheme.id}:${scheme.version}:${save.userId}`,
+            metadata: { schemeId: scheme.id, version: scheme.version, publishedAt: publishedAt.toISOString() },
+          });
+        }),
+    );
 
     await recordAudit(
       {

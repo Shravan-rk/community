@@ -2,12 +2,13 @@
 
 AI-powered government scheme awareness and livelihood assistance platform for rural citizens in India. Kannada-first, mobile-first, built for Karnataka with support for English and Hindi.
 
-> **Status:** Early development. Backend foundation and APIs (Phases 0–5: auth/RBAC, discovery, admin scheme workflow, eligibility assessment, demo monitoring/extraction review) are implemented. The citizen UI is not built yet. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
+> **Status:** Early development. The backend foundation and a React citizen/admin client are implemented. Scheme monitoring is demo-only; AI assistance, live government integrations and several assistance features remain unbuilt. See [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md).
 
 ## Repository layout
 
 ```
 grama-sahay/
+├─ client/               React + TypeScript + Vite citizen/admin application
 ├─ docs/                 Project, architecture, API, database, integration and test docs
 └─ server/               Express + TypeScript API, Prisma + SQLite
    ├─ prisma/            Schema, migrations, seed data
@@ -31,6 +32,16 @@ npm run db:push             # create local SQLite schema
 npm run seed                # categories, sources, demo schemes, demo users
 npm run dev                 # http://localhost:4000/api/health
 ```
+
+In a second terminal, start the client from the repository root:
+
+```bash
+npm run dev:client          # http://localhost:5173
+```
+
+The Vite development server proxies `/api` to `http://localhost:4000`. `VITE_API_URL` can be set
+when the client needs a different API base URL. Install both workspaces with `npm run install:all`;
+build or typecheck the client with `npm run build:client` and `npm run typecheck:client`.
 
 Check the API is up:
 

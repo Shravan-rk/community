@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="GRAMA SAHAY">
+  <rect width="512" height="512" fill="#265134"/>
+  <circle cx="256" cy="256" r="160" fill="#f4ead6"/>
+  <path d="M256 132c-48 0-86 38-86 86 0 64 86 158 86 158s86-94 86-158c0-48-38-86-86-86z" fill="#2e6540"/>
+  <circle cx="256" cy="218" r="34" fill="#f4ead6"/>
+</svg>

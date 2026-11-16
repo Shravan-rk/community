@@ -4,9 +4,9 @@ Last updated: 2026-11-16
 
 ## Current development phase
 
-**Phases 0–5 complete**: foundation (safety, database, auth/RBAC), public discovery plus admin
-scheme management, the eligibility assessment engine, and a monitoring/extraction review pipeline
-that runs against a clearly labelled local demo feed.
+**Phases 0–5 complete; Phase 6 client foundation implemented**: safety, database, auth/RBAC, public
+discovery and admin scheme management, eligibility assessment, demo-only monitoring/review, and a
+React client wired to the existing APIs. The broader citizen-assistance product is still in progress.
 
 > The master plan lists UI as Phase 2 and database as Phase 3. Based on the approved audit
 > decisions (empty repository, no PostgreSQL/Redis), work started with safety, database and
@@ -97,15 +97,26 @@ that runs against a clearly labelled local demo feed.
   Rejections record the reviewer, timestamp and notes; reviewed items cannot be processed twice.
 - Optional in-process scheduler controlled by `MONITORING_WORKER_ENABLED` (default off) and
   `MONITORING_POLL_MINUTES`; it only checks due demo sources. Manual runs always remain available.
-- 59 automated tests total across 4 files (10 new monitoring tests) — all passing.
+- 66 automated tests total across 5 files, including application/notification/assistance/feedback
+  operations — all passing.
+
+## Not started
+### Phase 6 — Client foundation
+- React/Vite entry point and client routes are wired to the existing app context, layouts and auth guards.
+- Citizen flows include discovery, details/compare, matches, saved schemes, applications,
+  notifications, profile and assistance centres; staff flows include scheme management, monitoring,
+  operations and user administration.
+- Client strict TypeScript compilation and production Vite build pass.
+- No frontend automated/browser tests are configured yet; route behavior and responsive/accessibility
+  coverage still need dedicated validation.
 
 ## Not started
 
-- Citizen web UI (Kannada-first React application).
 - Government source retrieval, OCR/AI extraction and machine translation (only the demo adapter and
   human/demo-authored extraction review exist; real integrations are not configured).
-- AI voice assistant, application assistant.
-- Notification delivery (in-app/Web Push/SMS/WhatsApp), analytics, village assistance, PWA/offline.
+- AI chat/voice assistant and document OCR/readiness workflows.
+- Notification delivery (in-app/Web Push/SMS/WhatsApp integrations), family scheme finder, deadline
+  radar, full offline/PWA workflows and external application-status integrations.
 
 ## Known issues / limitations
 

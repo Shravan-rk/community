@@ -10,9 +10,10 @@ Database under test: SQLite `server/prisma/dev.db` (smoke) and dedicated `server
 |---|---|---|
 | TypeScript typecheck | `npm run typecheck` | **PASS** (0 errors) |
 | Production build | `npm run build` | **PASS** (`dist/index.js` emitted) |
+| Client production build | `npm run build:client` | **PASS** (TypeScript + Vite bundle) |
 | Seed (first run) | `npm run seed` | **PASS** — 16 categories, 7 sources, 5 users, 12 schemes created |
 | Seed (second run, idempotency) | `npm run seed` | **PASS** — 0 created, 12 updated |
-| Automated API tests | `npm run test` | **PASS** — 59/59 tests, 4 files |
+| Automated API tests | `npm run test` | **PASS** — 66/66 tests, 5 files |
 | Live API smoke test | start server + HTTP calls | **PASS** (Phase 2 baseline; later phases exercised through Supertest) |
 | Prisma schema validation | implicit in `generate`/`migrate`/`db push` | **PASS** |
 
@@ -22,9 +23,10 @@ Database under test: SQLite `server/prisma/dev.db` (smoke) and dedicated `server
 ✓ tests/schemes.test.ts (14 tests) 1339ms
 ✓ tests/eligibility.test.ts (17 tests) 1095ms
 ✓ tests/monitoring.test.ts (10 tests) 1208ms
+✓ tests/operations.test.ts (7 tests)
 ✓ tests/auth.test.ts (18 tests) 571ms
-Test Files  4 passed (4)
-Tests       59 passed (59)
+Test Files  5 passed (5)
+Tests       66 passed (66)
 Duration    9.64s
 ```
 
@@ -89,6 +91,10 @@ Coverage of behaviour:
     `isDemoData=true`; rejections create no scheme; missing fields/unknown categories return `400`;
     reviewed extractions cannot be approved twice (`409`); reviewer field corrections are applied;
     `EXTRACTION_APPROVED` is audited.
+47. Applications support citizen draft creation, updates and listing; staff status changes notify the
+    citizen, and non-draft tracking records cannot be deleted.
+48. Scheme publication notifications, read/unread state, assistance centre lookup and requests,
+    staff assignment, feedback review, analytics role checks, and admin-only centre creation work.
 
 Test isolation: the global setup runs `prisma db push --force-reset` **only** against the dedicated
 `prisma/test.db`. The development database is never reset by tests. Every test calls the shared
@@ -110,12 +116,17 @@ META: languages=kn,en,hi roles=CITIZEN,VILLAGE_FACILITATOR,SCHEME_VERIFIER,ADMIN
 Seeded database verification: `schemes=12, published=10, pending=2, categories=16, users=5,
 translations=12, eligibilityRules=18`.
 
-## Not yet tested (features not built)
+## Frontend validation
 
-- Citizen/admin UI (no frontend exists yet).
+- The client production build passes, but there are no automated component, browser, or end-to-end UI tests.
+- Responsive behavior and accessibility have not had a dedicated audit.
+
+## Not yet tested or integrated
+
 - Monitoring is exercised only against the local demo adapter; real government retrieval, OCR/AI
-  extraction, automated translation, notifications, analytics and the voice assistant are not built.
-- No load/performance testing, penetration testing or accessibility audit.
+    extraction, automated translation, external notification delivery and the conversational voice
+    assistant are not built.
+- No load/performance testing, penetration testing, or multi-instance behavior testing.
 - Multi-instance rate limiting / shared cache behaviour is untested.
 
 ## Known test limitations

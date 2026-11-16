@@ -21,13 +21,16 @@ Planned later:
   real fetcher ──► OCR ──► LLM extraction ──► translation ──► verification queue
 ```
 
-## Frontend (planned, Phase 6)
+## Frontend (Phase 6 foundation implemented)
 
 - React 18 + TypeScript + Vite + Tailwind CSS + React Router + Lucide icons.
-- Kannada-first copy with English/Hindi switching; mobile-first, large touch targets.
-- Green primary theme on warm neutral surfaces; accessible contrast.
-- No placeholder pages: every route is backed by the API built in earlier phases.
-- PWA/offline strategy and low-bandwidth mode in a later phase.
+- Kannada-first copy with English/Hindi switching; responsive layouts and role-gated routes.
+- Citizen pages cover scheme discovery/details/compare, eligibility matches, profile, saved items,
+  applications, notifications and assistance centres. Admin pages cover dashboard, schemes,
+  monitoring review, operations and users.
+- The client uses the existing REST API; API availability and supported integrations remain limited
+  to what is implemented on the backend. Offline support is partial, not a complete offline workflow.
+- The client currently has a production build/typecheck but no automated browser/component test suite.
 
 ## Backend (implemented, Phases 2+)
 - Node.js + Express 4 + TypeScript (ESM, NodeNext resolution, strict mode).

@@ -1,0 +1,25 @@
+{
+  "name": "GRAMA SAHAY",
+  "short_name": "GRAMA SAHAY",
+  "description": "Kannada-first government scheme discovery and application guidance for rural Karnataka.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fbf7ef",
+  "theme_color": "#265134",
+  "lang": "kn",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
